@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  AppShell,
   Center,
+  Container,
   Stack,
   Text,
 } from '@mantine/core';
@@ -14,16 +14,9 @@ import { Authenticated } from 'convex/react';
 
 export default function App() {
   return (
-    <AppShell
-      header={{ height: 60 }}
-      padding="md"
-    >
-      <AppShell.Header>
-        <Header />
-      </AppShell.Header>
-
-      <AppShell.Main>
-        <Routes>
+    <Container>
+      <Header />
+      <Routes>
           <Route path="/" element={
             <Authenticated>
               <Home />
@@ -43,7 +36,6 @@ export default function App() {
             </Center>
           } />
         </Routes>
-      </AppShell.Main>
-    </AppShell>
+    </Container>
   );
 }

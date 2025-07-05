@@ -59,32 +59,34 @@ export default function Game() {
   if (!game) { return null; }
 
   return (
-    <Stack>
-        {game.isHost && (
-            <Group>
-                { game.image && !game.answer ? (
-                    <Button onClick={async () => {
-                        try {
-                            setDisableHostButton(true);
-                            await revealAnswerAction({ gameId: id as Id<"games">});
-                        } finally {
-                            setDisableHostButton(false);
-                        }
-                    }} disabled={disableHostButton}>Reveal answer</Button>
-                ) : (
-                    <Button onClick={async () => {
-                        try {
-                            setDisableHostButton(true);
-                            await newRoundAction({ gameId: id as Id<"games">});
-                        } finally {
-                            setDisableHostButton(false);
-                        }
-                    }} disabled={disableHostButton}>{game.round === 0 ? "Begin game" : "Next round"}</Button>
-                )}
-                <GameSettings game={game} gameID={id} />
-            </Group>
-        )}
-        {game.image && <img src={game.image} width={300} height={300} />}
+    <Flex wrap="wrap" gap="xl" justify="space-between">
+        <Stack>
+            {game.isHost && (
+                <Group>
+                    { game.image && !game.answer ? (
+                        <Button onClick={async () => {
+                            try {
+                                setDisableHostButton(true);
+                                await revealAnswerAction({ gameId: id as Id<"games">});
+                            } finally {
+                                setDisableHostButton(false);
+                            }
+                        }} disabled={disableHostButton}>Reveal answer</Button>
+                    ) : (
+                        <Button onClick={async () => {
+                            try {
+                                setDisableHostButton(true);
+                                await newRoundAction({ gameId: id as Id<"games">});
+                            } finally {
+                                setDisableHostButton(false);
+                            }
+                        }} disabled={disableHostButton}>{game.round === 0 ? "Begin game" : "Next round"}</Button>
+                    )}
+                    <GameSettings game={game} gameID={id} />
+                </Group>
+            )}
+            {game.image && <img src={game.image} width={300} height={300} />}
+        </Stack>
         <Stack>
             <Flex gap="md" align="end">
                 <TextInput
@@ -104,6 +106,6 @@ export default function Game() {
             ))}
             {game.answer && <span>Answer: {game.answer} {game.winner && `(Winner: ${game.winner})`}</span>}
         </Stack>
-    </Stack>
+    </Flex>
   );
 } 
