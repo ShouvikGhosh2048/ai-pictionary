@@ -1,7 +1,8 @@
 import { v } from "convex/values";
-import { query, mutation, action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { query, mutation, action, internalQuery } from "./_generated/server";
+import { api, internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { GoogleGenAI, Modality } from "@google/genai";
 
 // Write your Convex functions in any file inside this directory (`convex`).
 // See https://docs.convex.dev/functions for more.
@@ -52,30 +53,200 @@ export const addNumber = mutation({
   },
 });
 
-// You can fetch data from and send data to third-party APIs via an action:
-export const myAction = action({
-  // Validators for arguments.
+export const getGame = query({
   args: {
-    first: v.number(),
-    second: v.string(),
+    id: v.string(),
   },
-
-  // Action implementation.
   handler: async (ctx, args) => {
-    //// Use the browser-like `fetch` API to send HTTP requests.
-    //// See https://docs.convex.dev/functions/actions#calling-third-party-apis-and-using-npm-packages.
-    // const response = await ctx.fetch("https://api.thirdpartyservice.com");
-    // const data = await response.json();
+    const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.id)).first();
+    if (game === null) {
+      return null;
+    }
 
-    //// Query data by running Convex queries.
-    const data = await ctx.runQuery(api.myFunctions.listNumbers, {
-      count: 10,
-    });
-    console.log(data);
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      return null;
+    }
 
-    //// Write data by running Convex mutations.
-    await ctx.runMutation(api.myFunctions.addNumber, {
-      value: args.first,
-    });
+    const usernames = new Map<string, string>();
+    for (const guess of game.guesses) {
+      usernames.set(guess.userId, '');
+    }
+    if (game.winner) {
+      usernames.set(game.winner, '');
+    }
+
+    await Promise.all(Array.from(usernames.keys()).map(async (userId) => {
+      const user = await ctx.db.query("users").filter((q) => q.eq(q.field("_id"), userId)).first();
+      usernames.set(userId, user?.name ?? '');
+    }));
+
+    if (game.revealAnswer) {
+      return {
+        image: game.image,
+        answer: game.answer,
+        isHost: game.createdBy === userId,
+        guesses: game.guesses.map((guess) => ({
+          guess: guess.guess,
+          username: usernames.get(guess.userId) ?? '',
+        })),
+        winner: game.winner ? usernames.get(game.winner) ?? '' : undefined,
+        round: game.answersHistory.length,
+        theme: game.theme,
+      };
+    } else {
+      return {
+        image: game.image,
+        isHost: game.createdBy === userId,
+        guesses: game.guesses.map((guess) => ({
+          guess: guess.guess,
+          username: usernames.get(guess.userId) ?? '',
+        })),
+        winner: game.winner ? usernames.get(game.winner) ?? '' : undefined,
+        round: game.answersHistory.length,
+        theme: game.theme,
+      };
+    }
   },
+});
+
+export const getFullGame = internalQuery({
+  args: {
+    gameId: v.id("games"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.gameId);
+  }
+});
+
+export const createGame = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throw new Error("User not authenticated");
+    }
+
+    const gameId = await ctx.db.insert("games", {
+      createdBy: userId,
+      revealAnswer: false,
+      answersHistory: [],
+      guesses: [],
+      theme: '',
+    });
+    return gameId;
+  },
+});
+
+export const isCreator = query({
+  args: {
+    gameId: v.id("games"),
+  },
+  handler: async (ctx, args) => {
+    const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.gameId)).first();
+    if (game === null) {
+      return false;
+    }
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      return false;
+    }
+    return game.createdBy === userId;
+  }
+});
+
+export const setNewImage = mutation({
+  args: {
+    gameId: v.id("games"),
+    answer: v.string(),
+    image: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const isCreator = await ctx.runQuery(api.myFunctions.isCreator, { gameId: args.gameId });
+    if (!isCreator) {
+      return;
+    }
+
+    const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.gameId)).first();
+    if (game === null) {
+      return null;
+    }
+
+    await ctx.db.patch(args.gameId, {
+      answer: args.answer,
+      image: args.image,
+      revealAnswer: false,
+      answersHistory: [...game.answersHistory, args.answer],
+      guesses: [],
+      winner: undefined,
+    });
+  }
+});
+
+export const revealAnswer = mutation({
+  args: {
+    gameId: v.id("games"),
+  },
+  handler: async (ctx, args) => {
+    const isCreator = await ctx.runQuery(api.myFunctions.isCreator, { gameId: args.gameId });
+    if (!isCreator) {
+      return;
+    }
+
+    await ctx.db.patch(args.gameId, { revealAnswer: true });
+  }
+});
+
+export const setTheme = mutation({
+  args: {
+    gameId: v.id("games"),
+    theme: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const isCreator = await ctx.runQuery(api.myFunctions.isCreator, { gameId: args.gameId });
+    if (!isCreator) {
+      return;
+    }
+
+    await ctx.db.patch(args.gameId, { theme: args.theme });
+  }
+});
+
+export const addGuess = mutation({
+  args: {
+    gameId: v.id("games"),
+    guess: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.gameId)).first();
+    if (game === null) {
+      return;
+    }
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      return;
+    }
+
+    if (args.guess.toLowerCase() === game.answer?.toLowerCase()) {
+      await ctx.db.patch(args.gameId, {
+        guesses: [
+          ...game.guesses,
+          {
+            guess: args.guess,
+            userId: userId
+          }],
+        revealAnswer: true,
+        winner: userId,
+      });
+    } else {
+      await ctx.db.patch(args.gameId, {
+        guesses: [
+          ...game.guesses,
+          {
+            guess: args.guess,
+            userId: userId
+          }]
+      });
+    }
+  }
 });

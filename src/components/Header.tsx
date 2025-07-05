@@ -3,16 +3,19 @@ import {
   Group,
   Button,
 } from '@mantine/core';
-import { Link, useLocation } from 'react-router-dom';
-import { useConvexAuth } from "convex/react";
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useConvexAuth, useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { notifications } from '@mantine/notifications';
+import { api } from '../../convex/_generated/api';
 
 export default function Header() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signIn, signOut } = useAuthActions();
   const location = useLocation();
-
+  const navigate = useNavigate();
+  const newGameMutation = useMutation(api.myFunctions.createGame);
+  
   const handleSignIn = async () => {
     try {
       await signIn("google");
@@ -20,6 +23,19 @@ export default function Header() {
       notifications.show({
         title: 'Error',
         message: error.message,
+        color: 'red',
+      });
+    }
+  };
+
+  const handleNewGame = async () => {
+    try {
+      const gameId = await newGameMutation();
+      navigate(`/game/${gameId}`);
+    } catch (error: any) {
+      notifications.show({
+        title: 'Error',
+        message: error.message, 
         color: 'red',
       });
     }
@@ -42,17 +58,9 @@ export default function Header() {
             >
                 Home
             </Link>
-            <Link 
-                to="/game"
-                style={{
-                    textDecoration: 'none',
-                    color: isActive('/game') ? 'var(--mantine-color-blue-filled)' : 'inherit',
-                    fontWeight: 500,
-                    fontSize: 'var(--mantine-font-size-sm)'
-                }}
-            >
-                Game
-            </Link>
+            {isAuthenticated && (
+                <Button onClick={handleNewGame}>New Game</Button>
+            )}
             {!isAuthenticated ? (
                 <Button
                     loading={isLoading}

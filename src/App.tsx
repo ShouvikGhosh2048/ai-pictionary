@@ -29,7 +29,7 @@ export default function App() {
               <Home />
             </Authenticated>
           } />
-          <Route path="/game" element={
+          <Route path="/game/:id" element={
             <Authenticated>
               <Game />
             </Authenticated>

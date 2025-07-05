@@ -10,4 +10,17 @@ export default defineSchema({
   numbers: defineTable({
     value: v.number(),
   }),
+  games: defineTable({
+    createdBy: v.id("users"),
+    theme: v.string(),
+    image: v.optional(v.string()),
+    answer: v.optional(v.string()),
+    revealAnswer: v.boolean(),
+    answersHistory: v.array(v.string()),
+    guesses: v.array(v.object({
+      guess: v.string(),
+      userId: v.id("users"),
+    })),
+    winner: v.optional(v.id("users")),
+  }),
 });
