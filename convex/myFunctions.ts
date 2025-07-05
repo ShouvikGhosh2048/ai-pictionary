@@ -1,8 +1,7 @@
 import { v } from "convex/values";
-import { query, mutation, action, internalQuery } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { query, mutation, internalQuery } from "./_generated/server";
+import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { GoogleGenAI, Modality } from "@google/genai";
 
 // Write your Convex functions in any file inside this directory (`convex`).
 // See https://docs.convex.dev/functions for more.
