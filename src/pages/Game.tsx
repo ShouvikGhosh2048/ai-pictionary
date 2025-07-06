@@ -130,9 +130,16 @@ export default function Game() {
                     value={guess}
                     onChange={(e) => setGuess(e.target.value)}
                     disabled={game.round === 0 || game.answer !== undefined}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            addGuessMutation({ gameId: id as Id<"games">, guess });
+                            setGuess("");
+                        }
+                    }}
                 />
                 <Button onClick={async () => {
                     await addGuessMutation({ gameId: id as Id<"games">, guess });
+                    setGuess("");
                 }}
                 disabled={game.round === 0 || game.answer !== undefined}>Guess</Button>
             </Flex>
