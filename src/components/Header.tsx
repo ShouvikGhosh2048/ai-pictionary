@@ -43,7 +43,7 @@ export default function Header() {
 
   return (
     <Flex gap="sm" justify="space-between" align="center"
-      w="100%" px="md" py="sm" wrap="wrap"
+      w="100%" py="sm" wrap="wrap"
       style={{
         borderBottom: '1px solid var(--mantine-color-gray-2)',
         marginBottom: '1rem',

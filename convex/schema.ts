@@ -21,6 +21,10 @@ export default defineSchema({
       guess: v.string(),
       userId: v.id("users"),
     })),
+    scores: v.array(v.object({
+      userId: v.id("users"),
+      score: v.number(),
+    })),
     winner: v.optional(v.id("users")),
   }),
 });

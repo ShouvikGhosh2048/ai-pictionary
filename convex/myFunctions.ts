@@ -71,41 +71,30 @@ export const getGame = query({
     for (const guess of game.guesses) {
       usernames.set(guess.userId, '');
     }
-    if (game.winner) {
-      usernames.set(game.winner, '');
+    for (const score of game.scores) {
+      usernames.set(score.userId, '');
     }
-
     await Promise.all(Array.from(usernames.keys()).map(async (userId) => {
       const user = await ctx.db.query("users").filter((q) => q.eq(q.field("_id"), userId)).first();
       usernames.set(userId, user?.name ?? '');
     }));
 
-    if (game.revealAnswer) {
-      return {
-        image: game.image,
-        answer: game.answer,
-        isHost: game.createdBy === userId,
-        guesses: game.guesses.map((guess) => ({
-          guess: guess.guess,
-          username: usernames.get(guess.userId) ?? '',
-        })),
-        winner: game.winner ? usernames.get(game.winner) ?? '' : undefined,
-        round: game.answersHistory.length,
-        theme: game.theme,
-      };
-    } else {
-      return {
-        image: game.image,
-        isHost: game.createdBy === userId,
-        guesses: game.guesses.map((guess) => ({
-          guess: guess.guess,
-          username: usernames.get(guess.userId) ?? '',
-        })),
-        winner: game.winner ? usernames.get(game.winner) ?? '' : undefined,
-        round: game.answersHistory.length,
-        theme: game.theme,
-      };
-    }
+    return {
+      image: game.image,
+      isHost: game.createdBy === userId,
+      answer: game.revealAnswer ? game.answer : undefined, // Only show answer if it's been revealed
+      guesses: game.guesses.map((guess) => ({
+        guess: guess.guess,
+        username: usernames.get(guess.userId) ?? '',
+      })),
+      winner: game.winner ? usernames.get(game.winner) ?? '' : undefined,
+      round: game.answersHistory.length,
+      theme: game.theme,
+      scores: game.scores.map((score) => ({
+        username: usernames.get(score.userId) ?? '',
+        score: score.score,
+      })),
+    };
   },
 });
 
@@ -132,6 +121,7 @@ export const createGame = mutation({
       answersHistory: [],
       guesses: [],
       theme: '',
+      scores: [],
     });
     return gameId;
   },
@@ -227,6 +217,15 @@ export const addGuess = mutation({
     }
 
     if (args.guess.toLowerCase() === game.answer?.toLowerCase()) {
+      const scores = game.scores;
+      const scoreIndex = scores.findIndex((score) => score.userId === userId);
+      if (scoreIndex === -1) {
+        scores.push({ userId: userId, score: 1 });
+      } else {
+        scores[scoreIndex].score++;
+      }
+      scores.sort((a, b) => b.score - a.score);
+
       await ctx.db.patch(args.gameId, {
         guesses: [
           ...game.guesses,
@@ -236,6 +235,7 @@ export const addGuess = mutation({
           }],
         revealAnswer: true,
         winner: userId,
+        scores: scores,
       });
     } else {
       await ctx.db.patch(args.gameId, {
@@ -247,5 +247,21 @@ export const addGuess = mutation({
           }]
       });
     }
+  }
+});
+
+export const getRandomImage = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const images = await ctx.db.system.query("_storage").collect();
+    if (images.length === 0) {
+      throw new Error("No images in storage");
+    }
+    const image = images[Math.floor(Math.random() * images.length)];
+    const imageUrl = await ctx.storage.getUrl(image._id);
+    if (!imageUrl) {
+      throw new Error("Failed to get URL for uploaded image");
+    }
+    return imageUrl;
   }
 });
