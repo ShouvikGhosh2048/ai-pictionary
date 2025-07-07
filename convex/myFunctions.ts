@@ -297,3 +297,47 @@ export const getImages = query({
     return res;
   }
 });
+
+export const getImagesPaginated = query({
+  args: {
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 6; // Default to 6 images per page
+    
+    let query = ctx.db.query("images").order("desc");
+    
+    // If cursor is provided, start after that ID
+    if (args.cursor) {
+      const cursorDoc = await ctx.db.get(args.cursor as any);
+      if (cursorDoc) {
+        query = query.filter((q) => q.lt(q.field("_creationTime"), cursorDoc._creationTime));
+      }
+    }
+    
+    const images = await query.take(limit + 1); // Take one extra to check if there's more
+    const hasMore = images.length > limit;
+    const imagesToReturn = hasMore ? images.slice(0, limit) : images;
+    
+    const res = await Promise.all(imagesToReturn.map(async (image) => {
+      const imageUrl = await ctx.storage.getUrl(image.image);
+      if (!imageUrl) {
+        throw new Error("Failed to get URL for uploaded image");
+      }
+      return {
+        _id: image._id,
+        image: imageUrl,
+        theme: image.theme,
+        answer: image.answer,
+        _creationTime: image._creationTime,
+      };
+    }));
+    
+    return {
+      images: res,
+      hasMore,
+      nextCursor: hasMore ? imagesToReturn[imagesToReturn.length - 1]._id : null,
+    };
+  }
+});
