@@ -79,8 +79,17 @@ export const getGame = query({
       usernames.set(userId, user?.name ?? '');
     }));
 
+    // Get a URL that can be used to access the image
+    let imageUrl = undefined;
+    if (game.image) {
+      imageUrl = await ctx.storage.getUrl(game.image);
+      if (!imageUrl) {
+        throw new Error("Failed to get URL for uploaded image");
+      }
+    }
+
     return {
-      image: game.image,
+      image: imageUrl,
       isHost: game.createdBy === userId,
       answer: game.revealAnswer ? game.answer : undefined, // Only show answer if it's been revealed
       guesses: game.guesses.map((guess) => ({
@@ -148,7 +157,7 @@ export const setNewImage = mutation({
   args: {
     gameId: v.id("games"),
     answer: v.string(),
-    image: v.string(),
+    imageStorageId: v.id("_storage"),
   },
   handler: async (ctx, args) => {
     const isCreator = await ctx.runQuery(api.myFunctions.isCreator, { gameId: args.gameId });
@@ -161,9 +170,16 @@ export const setNewImage = mutation({
       return null;
     }
 
+    await ctx.db.insert("images", {
+      image: args.imageStorageId,
+      game: args.gameId,
+      theme: game.theme,
+      answer: args.answer,
+    });
+
     await ctx.db.patch(args.gameId, {
       answer: args.answer,
-      image: args.image,
+      image: args.imageStorageId,
       revealAnswer: false,
       answersHistory: [...game.answersHistory, args.answer],
       guesses: [],
@@ -258,10 +274,26 @@ export const getRandomImage = internalQuery({
       throw new Error("No images in storage");
     }
     const image = images[Math.floor(Math.random() * images.length)];
-    const imageUrl = await ctx.storage.getUrl(image._id);
-    if (!imageUrl) {
-      throw new Error("Failed to get URL for uploaded image");
-    }
-    return imageUrl;
+    return image._id;
+  }
+});
+
+export const getImages = query({
+  args: {},
+  handler: async (ctx) => {
+    const images = await ctx.db.query("images").collect();
+    images.sort((a, b) => b._creationTime - a._creationTime);
+    const res = await Promise.all(images.map(async (image) => {
+      const imageUrl = await ctx.storage.getUrl(image.image);
+      if (!imageUrl) {
+        throw new Error("Failed to get URL for uploaded image");
+      }
+      return {
+        image: imageUrl,
+        theme: image.theme,
+        answer: image.answer,
+      };
+    }));
+    return res;
   }
 });

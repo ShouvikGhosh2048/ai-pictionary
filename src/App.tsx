@@ -18,9 +18,7 @@ export default function App() {
       <Header />
       <Routes>
           <Route path="/" element={
-            <Authenticated>
-              <Home />
-            </Authenticated>
+            <Home />
           } />
           <Route path="/game/:id" element={
             <Authenticated>

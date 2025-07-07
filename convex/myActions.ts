@@ -42,12 +42,7 @@ async function getImageFromGemini(theme: string, answer: string, ctx: ActionCtx)
       const blob = new Blob([buffer], { type: "image/png" });
       
       const storageId = await ctx.storage.store(blob);
-      // Get a URL that can be used to access the image
-      const imageUrl = await ctx.storage.getUrl(storageId);
-      if (!imageUrl) {
-        throw new Error("Failed to get URL for uploaded image");
-      }
-      return imageUrl;
+      return storageId;
     }
   }
 
@@ -108,13 +103,13 @@ export const newRound = action({
         const answer = answerResponseParts[0]?.text;
         if (!answer) { throw new Error("Didn't get an answer"); }
 
-        const imageUrl = await getImageFromGemini(game.theme, answer, ctx);
-        // const imageUrl = await ctx.runQuery(internal.myFunctions.getRandomImage); // For dev
+        const storageId = await getImageFromGemini(game.theme, answer, ctx);
+        // const storageId = await ctx.runQuery(internal.myFunctions.getRandomImage); // For dev
   
         await ctx.runMutation(api.myFunctions.setNewImage, {
           gameId: args.gameId,
           answer: answer,
-          image: imageUrl,
+          imageStorageId: storageId,
         });
       } catch (error) {
         console.error("Error generating image description:", error);

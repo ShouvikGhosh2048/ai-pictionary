@@ -1,61 +1,33 @@
 import {
-  useMutation,
-  useQuery,
-} from "convex/react";
-import { api } from "../../convex/_generated/api";
-import {
   Text,
   Container,
   Title,
   Stack,
-  Loader,
-  Center,
-  Button,
+  Image,
+  Flex,
 } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 export default function Home() {
-  const { viewer, numbers } =
-    useQuery(api.myFunctions.listNumbers, {
-      count: 10,
-    }) ?? {};
-  const addNumber = useMutation(api.myFunctions.addNumber);
-
-  if (viewer === undefined || numbers === undefined) {
-    return (
-      <Center>
-        <Stack align="center" gap="md">
-          <Loader size="lg" />
-          <Text>Loading... (consider a loading skeleton)</Text>
-        </Stack>
-      </Center>
-    );
-  }
-
-  const handleAddNumber = () => {
-    void addNumber({ value: Math.floor(Math.random() * 10) });
-    notifications.show({
-      title: 'Success',
-      message: 'Random number added!',
-      color: 'green',
-    });
-  };
+  const images = useQuery(api.myFunctions.getImages);
 
   return (
     <Container size="lg" py="xl">
       <Stack gap="xl" align="center">
         <Title order={1} ta="center">AI Pictionary</Title>
-        <Stack gap="xl" maw={600} mx="auto">
-          <Text size="lg">Welcome {viewer ?? "Anonymous"}!</Text>
-          
+        <Stack gap="xl" mx="auto">
           <Text>
-            Click the button below and open this page in another window - this data
-            is persisted in the Convex cloud database!
+            Try out a game by signing in or view generated images below.
           </Text>
-          
-          <Button onClick={handleAddNumber}>
-            Add a random number
-          </Button>
+          <Flex wrap="wrap" gap="lg">
+            {images?.map((image) => (
+              <Container key={image.image}>
+                <Text>{image.theme}: {image.answer}</Text>
+                <Image src={image.image} alt={image.theme} w={300} h={300} />
+              </Container>
+            ))}
+          </Flex>
         </Stack>
       </Stack>
     </Container>

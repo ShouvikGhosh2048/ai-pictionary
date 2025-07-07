@@ -13,7 +13,7 @@ export default defineSchema({
   games: defineTable({
     createdBy: v.id("users"),
     theme: v.string(),
-    image: v.optional(v.string()),
+    image: v.optional(v.id("_storage")),
     answer: v.optional(v.string()),
     revealAnswer: v.boolean(),
     answersHistory: v.array(v.string()),
@@ -26,5 +26,11 @@ export default defineSchema({
       score: v.number(),
     })),
     winner: v.optional(v.id("users")),
+  }),
+  images: defineTable({
+    image: v.id("_storage"),
+    game: v.id("games"),
+    theme: v.string(),
+    answer: v.string(),
   }),
 });
