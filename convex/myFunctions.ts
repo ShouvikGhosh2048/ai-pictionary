@@ -311,7 +311,7 @@ export const getImages = query({
 
 export const migrateGame = internalMutation({
   args: {},
-  handler: async (ctx, args) => {
+  handler: async (ctx) => {
     const games = await ctx.db.query("games").collect();
     for (const game of games) {
       const image = game.image;
