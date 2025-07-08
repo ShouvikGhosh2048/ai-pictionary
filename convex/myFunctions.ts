@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, internalQuery } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { api } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
@@ -61,6 +61,7 @@ export const getGame = query({
     if (game === null) {
       return null;
     }
+    if (typeof game.image === 'string') { throw new Error("Migrating right now"); }
 
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
@@ -82,7 +83,7 @@ export const getGame = query({
     // Get a URL that can be used to access the image
     let imageUrl = undefined;
     if (game.image) {
-      imageUrl = await ctx.storage.getUrl(game.image);
+      imageUrl = await ctx.storage.getUrl(game.image.image);
       if (!imageUrl) {
         throw new Error("Failed to get URL for uploaded image");
       }
@@ -91,7 +92,7 @@ export const getGame = query({
     return {
       image: imageUrl,
       isHost: game.createdBy === userId,
-      answer: game.revealAnswer ? game.answer : undefined, // Only show answer if it's been revealed
+      answer: game.revealAnswer ? game.image?.answer : undefined, // Only show answer if it's been revealed
       guesses: game.guesses.map((guess) => ({
         guess: guess.guess,
         username: usernames.get(guess.userId) ?? '',
@@ -170,16 +171,12 @@ export const setNewImage = mutation({
       return null;
     }
 
-    await ctx.db.insert("images", {
-      image: args.imageStorageId,
-      game: args.gameId,
-      theme: game.theme,
-      answer: args.answer,
-    });
-
     await ctx.db.patch(args.gameId, {
-      answer: args.answer,
-      image: args.imageStorageId,
+      image: {
+        image: args.imageStorageId,
+        theme: game.theme,
+        answer: args.answer,
+      },
       revealAnswer: false,
       answersHistory: [...game.answersHistory, args.answer],
       guesses: [],
@@ -197,8 +194,17 @@ export const revealAnswer = mutation({
     if (!isCreator) {
       return;
     }
+    const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.gameId)).first();
+    if (game === null || game.image === undefined) {
+      return;
+    }
+    if (typeof game.image === 'string') { throw new Error("Migrating right now"); }
 
     await ctx.db.patch(args.gameId, { revealAnswer: true });
+    await ctx.db.insert("images", {
+      ...game.image,
+      game: args.gameId,
+    });
   }
 });
 
@@ -224,15 +230,16 @@ export const addGuess = mutation({
   },
   handler: async (ctx, args) => {
     const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.gameId)).first();
-    if (game === null) {
+    if (game === null || game.image === undefined) {
       return;
     }
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
       return;
     }
+    if (typeof game.image === 'string') { throw new Error("Migrating right now"); }
 
-    if (args.guess.toLowerCase() === game.answer?.toLowerCase()) {
+    if (args.guess.toLowerCase() === game.image.answer.toLowerCase()) {
       const scores = game.scores;
       const scoreIndex = scores.findIndex((score) => score.userId === userId);
       if (scoreIndex === -1) {
@@ -252,6 +259,10 @@ export const addGuess = mutation({
         revealAnswer: true,
         winner: userId,
         scores: scores,
+      });
+      await ctx.db.insert("images", {
+        ...game.image,
+        game: args.gameId,
       });
     } else {
       await ctx.db.patch(args.gameId, {
@@ -295,6 +306,28 @@ export const getImages = query({
       };
     }));
     return res;
+  }
+});
+
+export const migrateGame = internalMutation({
+  args: {},
+  handler: async (ctx, args) => {
+    const games = await ctx.db.query("games").collect();
+    for (const game of games) {
+      const image = game.image;
+      if (typeof image === 'string') {
+        const imageData = await ctx.db.query("images").filter((q) => q.eq(q.field("image"), image)).first();
+        if (imageData === null) { throw new Error('No image for ' + image); }
+        await ctx.db.patch(game._id, {
+          image: {
+          image: imageData.image,
+            theme: imageData.theme,
+            answer: imageData.answer,
+          },
+          answer: undefined
+        });
+      }
+    }
   }
 });
 

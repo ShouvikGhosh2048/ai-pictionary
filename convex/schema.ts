@@ -13,7 +13,11 @@ export default defineSchema({
   games: defineTable({
     createdBy: v.id("users"),
     theme: v.string(),
-    image: v.optional(v.id("_storage")),
+    image: v.optional(v.union(v.object({
+      image: v.id("_storage"),
+      theme: v.string(),
+      answer: v.string(),
+    }), v.id("_storage"))),
     answer: v.optional(v.string()),
     revealAnswer: v.boolean(),
     answersHistory: v.array(v.string()),
