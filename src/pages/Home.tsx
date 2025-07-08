@@ -9,8 +9,8 @@ import {
   Center,
 } from '@mantine/core';
 import { useQuery } from 'convex/react';
-import { useIntersection } from '@mantine/hooks';
-import { useState, useEffect, useRef } from 'react';
+import { useInViewport } from '@mantine/hooks';
+import { useState, useEffect } from 'react';
 import { api } from '../../convex/_generated/api';
 
 interface ImageData {
@@ -23,27 +23,29 @@ interface ImageData {
 
 export default function Home() {
   const [allImages, setAllImages] = useState<ImageData[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [startCursor, setStartCursor] = useState<number | null>(null);
+  const [loadCursor, setLoadCursor] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   // Load initial images
-  const initialImages = useQuery(api.myFunctions.getImagesPaginated, {
-    limit: 6,
-  });
+  const initialImages = useQuery(
+    api.myFunctions.getImagesPaginated,
+    startCursor ? { limit: 6, cursor: startCursor } : 'skip'
+  );
   
   // Load more images when cursor changes
   const moreImages = useQuery(
     api.myFunctions.getImagesPaginated,
-    cursor ? { limit: 6, cursor } : 'skip'
+    loadCursor ? { limit: 6, cursor: loadCursor } : 'skip'
   );
   
   // Set up intersection observer for infinite scroll
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { ref: lastImageRef, entry } = useIntersection({
-    root: containerRef.current,
-    threshold: 1,
-  });
+  const { ref: endRef, inViewport } = useInViewport();
+
+  useEffect(() => {
+    setStartCursor(Date.now());
+  }, []);
 
   // Handle initial load
   useEffect(() => {
@@ -51,33 +53,33 @@ export default function Home() {
       setAllImages(initialImages.images);
       setHasMore(initialImages.hasMore);
       if (!initialImages.hasMore) {
-        setCursor(null);
+        setLoadCursor(null);
       }
     }
   }, [initialImages]);
 
   // Handle loading more images
   useEffect(() => {
-    if (moreImages && cursor) {
+    if (moreImages && loadCursor) {
       setAllImages(prev => [...prev, ...moreImages.images]);
       setHasMore(moreImages.hasMore);
       setIsLoadingMore(false);
     }
-  }, [moreImages, cursor]);
+  }, [moreImages, loadCursor]);
 
   // Trigger load more when last image is visible
   useEffect(() => {
-    if (entry?.isIntersecting && hasMore && !isLoadingMore && allImages.length > 0) {
+    if (inViewport && hasMore && !isLoadingMore && allImages.length > 0) {
       setIsLoadingMore(true);
       const lastImage = allImages[allImages.length - 1];
       if (lastImage) {
-        setCursor(lastImage._id);
+        setLoadCursor(lastImage._creationTime);
       }
     }
-  }, [entry?.isIntersecting, hasMore, isLoadingMore, allImages]);
+  }, [inViewport, hasMore, isLoadingMore, allImages]);
 
   return (
-    <Container size="lg" py="xl" ref={containerRef}>
+    <Container size="lg" py="xl">
       <Stack gap="xl" align="center">
         <Title order={1} ta="center">AI Pictionary</Title>
         <Stack gap="xl" mx="auto">
@@ -85,11 +87,8 @@ export default function Home() {
             Try out a game by signing in or view generated images below.
           </Text>
           <Flex wrap="wrap" gap="lg">
-            {allImages.map((image, index) => (
-              <Container 
-                key={image._id} 
-                ref={index === allImages.length - 1 ? lastImageRef : undefined}
-              >
+            {allImages.map(image => (
+              <Container key={image._id}>
                 <Text>{image.theme}: {image.answer}</Text>
                 <Image src={image.image} alt={image.theme} w={300} h={300} />
               </Container>
@@ -100,11 +99,9 @@ export default function Home() {
               <Loader size="md" />
             </Center>
           )}
-          {!hasMore && allImages.length > 0 && (
-            <Center>
-              <Text c="dimmed">No more images to load</Text>
-            </Center>
-          )}
+          <Center ref={endRef}>
+            <Text c="dimmed" mih="sm">{!hasMore && allImages.length > 0 && "No more images to load"}</Text>
+          </Center>
         </Stack>
       </Stack>
     </Container>

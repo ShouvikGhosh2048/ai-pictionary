@@ -301,7 +301,7 @@ export const getImages = query({
 export const getImagesPaginated = query({
   args: {
     limit: v.optional(v.number()),
-    cursor: v.optional(v.string()),
+    cursor: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const limit = args.limit ?? 6; // Default to 6 images per page
@@ -309,11 +309,10 @@ export const getImagesPaginated = query({
     let query = ctx.db.query("images").order("desc");
     
     // If cursor is provided, start after that ID
-    if (args.cursor) {
-      const cursorDoc = await ctx.db.get(args.cursor as any);
-      if (cursorDoc) {
-        query = query.filter((q) => q.lt(q.field("_creationTime"), cursorDoc._creationTime));
-      }
+    const cursor = args.cursor;
+    if (cursor) {
+      // TODO: Might be an issue if two images are created at the same time
+      query = query.filter((q) => q.lt(q.field("_creationTime"), cursor));
     }
     
     const images = await query.take(limit + 1); // Take one extra to check if there's more
