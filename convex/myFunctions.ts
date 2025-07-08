@@ -61,7 +61,6 @@ export const getGame = query({
     if (game === null) {
       return null;
     }
-    if (typeof game.image === 'string') { throw new Error("Migrating right now"); }
 
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
@@ -198,7 +197,6 @@ export const revealAnswer = mutation({
     if (game === null || game.image === undefined) {
       return;
     }
-    if (typeof game.image === 'string') { throw new Error("Migrating right now"); }
 
     await ctx.db.patch(args.gameId, { revealAnswer: true });
     await ctx.db.insert("images", {
@@ -237,7 +235,6 @@ export const addGuess = mutation({
     if (userId === null) {
       return;
     }
-    if (typeof game.image === 'string') { throw new Error("Migrating right now"); }
 
     if (args.guess.toLowerCase() === game.image.answer.toLowerCase()) {
       const scores = game.scores;
@@ -306,28 +303,6 @@ export const getImages = query({
       };
     }));
     return res;
-  }
-});
-
-export const migrateGame = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const games = await ctx.db.query("games").collect();
-    for (const game of games) {
-      const image = game.image;
-      if (typeof image === 'string') {
-        const imageData = await ctx.db.query("images").filter((q) => q.eq(q.field("image"), image)).first();
-        if (imageData === null) { throw new Error('No image for ' + image); }
-        await ctx.db.patch(game._id, {
-          image: {
-          image: imageData.image,
-            theme: imageData.theme,
-            answer: imageData.answer,
-          },
-          answer: undefined
-        });
-      }
-    }
   }
 });
 
