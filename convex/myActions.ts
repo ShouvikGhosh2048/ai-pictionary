@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { action, ActionCtx } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import { GoogleGenAI, Modality } from "@google/genai";
 
 async function getImageFromGemini(theme: string, answer: string, ctx: ActionCtx) {
