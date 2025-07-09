@@ -1,7 +1,7 @@
 import { v } from "convex/values";
-import { query, mutation, internalQuery } from "./_generated/server";
-import { api } from "./_generated/api";
+import { query, mutation, internalQuery, internalMutation, QueryCtx } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { Id } from "./_generated/dataModel";
 
 // Write your Convex functions in any file inside this directory (`convex`).
 // See https://docs.convex.dev/functions for more.
@@ -17,9 +17,6 @@ export const getGame = query({
     }
 
     const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      return null;
-    }
 
     const usernames = new Map<string, string>();
     for (const guess of game.guesses) {
@@ -90,44 +87,41 @@ export const createGame = mutation({
   },
 });
 
-export const isCreator = query({
-  args: {
-    gameId: v.id("games"),
-  },
-  handler: async (ctx, args) => {
-    const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.gameId)).first();
-    if (game === null) {
-      return false;
-    }
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      return false;
-    }
-    return game.createdBy === userId;
-  }
-});
 
-export const setNewImage = mutation({
+const isCreator = async (ctx: QueryCtx, gameId: Id<"games">) => {
+  const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), gameId)).first();
+  if (game === null) {
+    return false;
+  }
+  const userId = await getAuthUserId(ctx);
+  if (userId === null) {
+    return false;
+  }
+  return game.createdBy === userId;
+}
+
+export const setNewImage = internalMutation({
   args: {
     gameId: v.id("games"),
+    theme: v.string(),
     answer: v.string(),
     imageStorageId: v.id("_storage"),
   },
   handler: async (ctx, args) => {
-    const isCreator = await ctx.runQuery(api.myFunctions.isCreator, { gameId: args.gameId });
-    if (!isCreator) {
+    const creator = await isCreator(ctx, args.gameId);
+    if (!creator) {
       return;
     }
 
     const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.gameId)).first();
-    if (game === null) {
-      return null;
+    if (game === null || game.image && !game.revealAnswer) {
+      return;
     }
 
     await ctx.db.patch(args.gameId, {
       image: {
         image: args.imageStorageId,
-        theme: game.theme,
+        theme: args.theme,
         answer: args.answer,
       },
       revealAnswer: false,
@@ -143,12 +137,12 @@ export const revealAnswer = mutation({
     gameId: v.id("games"),
   },
   handler: async (ctx, args) => {
-    const isCreator = await ctx.runQuery(api.myFunctions.isCreator, { gameId: args.gameId });
-    if (!isCreator) {
+    const creator = await isCreator(ctx, args.gameId);
+    if (!creator) {
       return;
     }
     const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.gameId)).first();
-    if (game === null || game.image === undefined) {
+    if (game === null || game.image === undefined || game.revealAnswer) {
       return;
     }
 
@@ -166,8 +160,8 @@ export const setTheme = mutation({
     theme: v.string(),
   },
   handler: async (ctx, args) => {
-    const isCreator = await ctx.runQuery(api.myFunctions.isCreator, { gameId: args.gameId });
-    if (!isCreator) {
+    const creator = await isCreator(ctx, args.gameId);
+    if (!creator) {
       return;
     }
 
@@ -182,9 +176,10 @@ export const addGuess = mutation({
   },
   handler: async (ctx, args) => {
     const game = await ctx.db.query("games").filter((q) => q.eq(q.field("_id"), args.gameId)).first();
-    if (game === null || game.image === undefined) {
+    if (game === null || game.image === undefined || game.revealAnswer) {
       return;
     }
+
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
       return;
@@ -298,7 +293,6 @@ export const getImagesPaginated = query({
     return {
       images: res,
       hasMore,
-      nextCursor: hasMore ? imagesToReturn[imagesToReturn.length - 1]._id : null,
     };
   }
 });

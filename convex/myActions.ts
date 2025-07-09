@@ -55,11 +55,6 @@ export const newRound = action({
     },
   
     handler: async (ctx, args) => {
-      const isCreator = await ctx.runQuery(api.myFunctions.isCreator, { gameId: args.gameId });
-      if (!isCreator) {
-        return;
-      }
-  
       const game = await ctx.runQuery(internal.myFunctions.getFullGame, { gameId: args.gameId });
       if (game === null) {
         return;
@@ -106,9 +101,10 @@ export const newRound = action({
         const storageId = await getImageFromGemini(game.theme, answer, ctx);
         // const storageId = await ctx.runQuery(internal.myFunctions.getRandomImage); // For dev
   
-        await ctx.runMutation(api.myFunctions.setNewImage, {
+        await ctx.runMutation(internal.myFunctions.setNewImage, {
           gameId: args.gameId,
           answer: answer,
+          theme: game.theme,
           imageStorageId: storageId,
         });
       } catch (error) {
